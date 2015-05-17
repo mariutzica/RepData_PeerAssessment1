@@ -1,25 +1,134 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
 ---
 
 
 ## Loading and preprocessing the data
 
+1. **Load the data.** The data is in a zipped format, so we unzip first, then read the comma separated information into the variable 'data'.
 
+```{r}
+data<-read.csv(unz("activity.zip","activity.csv"))
+```
+
+2. **Preprocess the data.** Grab the complete cases in data (diregard NAs) and store them in data.complete. Convert the date and interval of both the raw data and complete data to factor so that we can split up information by day.
+
+```{r}
+data.complete<-data[complete.cases(data),]
+data$date<-as.factor(data$date)
+data$interval<-as.factor(data$interval)
+data.complete$date<-droplevels(as.factor(data.complete$date))
+data.complete$interval<-droplevels(as.factor(data.complete$interval))
+```
 
 ## What is mean total number of steps taken per day?
 
+1. **Total number of steps per day.** Calculate by day (level), dropping any days for which there is no data (i.e., use data.complete). 
+
+```{r}
+stepsperday<-tapply(data.complete$steps,data.complete$date,sum)
+```
+
+2. **Histogram of number of steps taken each day.**
+
+```{r}
+hist(stepsperday)
+```
+
+3. **Mean and median of the total number of steps taken per day.**
+
+```{r simulation,results='hide'}
+meansteps<-mean(stepsperday)
+mediansteps<-median(stepsperday)
+```
+
+The mean steps per day is `r meansteps` and the median steps per day is `r mediansteps`.
 
 
 ## What is the average daily activity pattern?
 
+1. **Time series plot.** Plot of the average number of steps for each time interval (y-axis), taken over all days, v. the time interval, in increments of 5 (x-axis). 
+
+```{r}
+avintervalsteps<-tapply(data.complete$steps,data.complete$interval,mean)
+plot(levels(data.complete$interval),avintervalsteps,type="l")
+```
+
+2. **Interval with maximum steps.** First, find the maximum, then find the matching time interval.
+
+```{r simulation2,results='hide'}
+maxsteps<-max(avintervalsteps)
+indexmaxsteps<-levels(data.complete$interval)[avintervalsteps==maxsteps]
+```
+
+On average, the interval with the maximum number of steps is `r indexmaxsteps`.
 
 
 ## Imputing missing values
 
+1. **Missing values in the data set.**
+
+```{r simulation3,results='hide'}
+missing<-nrow(data)-nrow(data.complete)
+```
+
+The total number of incomplete data sets is `r missing`.
+
+2. **Devise a way of filling in the missing values.** Here, we choose to fill in the missing values with the average value for that time interval over all days.
+
+```{r}
+index<-is.na(data$steps)
+for (i in seq(along.with=index)) {
+    if (index[i]) data$steps[i]<-avintervalsteps[data$interval[i]==levels(data$interval)]
+}
+```
+
+3. **Histogram of the total number of steps taken each day.** After filling in the missing values, the new histogram of the steps per day is as follows:
+
+```{r}
+stepsperday.modify<-tapply(data$steps,data$date,sum)
+hist(stepsperday.modify)
+```
+
+4. **Calculate the new mean and median.**
+
+```{r simulation4,results='hide'}
+meansteps.modify<-mean(stepsperday.modify)
+mediansteps.modify<-median(stepsperday.modify)
+```
+
+The mean steps per day is `r meansteps.modify` and the median steps per day is `r mediansteps.modify`. The mean is unaffected, and the median becomes the mean, since the number of instances of the mean in the data increased.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+1. **Create a weekday factor.**
+
+```{r}
+data["day"]<-weekdays(as.Date(data$date))
+index.weekend<-(data$day=="Saturday"|data$day=="Sunday")
+data$day<-as.character(data$day)
+data$day[!index.weekend]<-"Weekday"
+data$day[index.weekend]<-"Weekend"
+data$day<-as.factor(data$day)
+```
+
+2. **Average number of steps taken during different intervals throughout the day, averaged over Weekend and Weekday days separaterly.** 
+
+```{r}
+temp<-split(data,data$day)
+weekdays<-temp[[1]]
+weekends<-temp[[2]]
+temp<-tapply(weekdays$steps,weekdays$interval,mean)
+temp2<-tapply(weekends$steps,weekends$interval,mean)
+data.rev<-data.frame(Interval=rep(as.numeric(levels(data$interval)),2),day=c(rep("Weekday",length(temp)),rep("Weekend",length(temp2))),steps=c(temp,temp2))
+data.rev$Interval<-as.numeric(data.rev$Interval)
+```
+
+Load the lattice package and use xyplot with 2 row layout to obtain the desired plot layout.
+
+```{r}
+library(lattice)
+xyplot(steps~Interval|day,data=data.rev,layout=c(1,2),type="l",ylab="Number of steps")
+
+```
